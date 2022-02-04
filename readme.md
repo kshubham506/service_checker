@@ -1,3 +1,4 @@
+This python script checks if the services are running on the server and if not send notifications to the user. Notifications can be a webhook message or any external api call to SMS/Call providers. Also user can set custom condition when to trigger the notifications.
 ## Steps to run as cron job
 
 - Send command `crontab -e`
