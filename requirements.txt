@@ -1,0 +1,3 @@
+psutil
+pytz
+python-dotenv
