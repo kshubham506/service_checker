@@ -18,7 +18,12 @@ IST = pytz.timezone("Asia/Kolkata")
 FORMAT = "%(asctime)s | %(message)s"
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format=FORMAT)
 
-SERVICES = [{"processId": -1, "processName": "", "args": "freeserver"}]
+SERVICES = [
+    {"processId": -1, "processName": "", "args": "freeserver5"},
+    {"processId": -1, "processName": "", "args": "freeserver6"},
+    {"processId": -1, "processName": "", "args": "freeserver7"},
+]
+
 NOTIFICATION_CHANNELS = [
     {
         "method": "POST",
@@ -57,6 +62,9 @@ def alert(service):
         try:
             current_time = datetime.now(IST)
             payload = {}
+            logging.info(
+                f"Current time in IST : {current_time}, hour : {current_time.hour}"
+            )
             for k, v in notification.get("body", {}).items():
                 payload[k] = v.format(args=service.get("args"))
             if notification.get("method") == "GET":

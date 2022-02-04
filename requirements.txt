@@ -1,3 +1,4 @@
 psutil
 pytz
 python-dotenv
+requests
