@@ -50,8 +50,10 @@ NOTIFICATION_CHANNELS = [
         },
         "url": config.get("SMS_URL"),
         "condition": lambda current_time: current_time.hour >= 10
-        and (current_time.minute > 15 and current_time.minute < 30)
-        or (current_time.minute > 45 and current_time.minute < 60),
+        and (
+            (current_time.minute > 15 and current_time.minute < 30)
+            or (current_time.minute > 45 and current_time.minute < 60)
+        ),
     },
 ]
 
