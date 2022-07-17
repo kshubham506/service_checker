@@ -8,6 +8,7 @@ import requests
 import pytz
 from dotenv import dotenv_values
 import os
+import json
 
 config = {
     **dotenv_values(".env"),
@@ -18,11 +19,8 @@ IST = pytz.timezone("Asia/Kolkata")
 FORMAT = "%(asctime)s | %(message)s"
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG, format=FORMAT)
 
-SERVICES = [
-    {"processId": -1, "processName": "", "args": "freeserver5"},
-    {"processId": -1, "processName": "", "args": "freeserver6"},
-    {"processId": -1, "processName": "", "args": "freeserver7"},
-]
+
+SERVICES = json.load(open("services.json"))
 
 NOTIFICATION_CHANNELS = [
     {
