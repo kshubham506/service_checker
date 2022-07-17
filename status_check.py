@@ -5,6 +5,7 @@ import psutil
 import logging
 import sys
 import requests
+from requests.adapters import HTTPAdapter, Retry
 import pytz
 from dotenv import dotenv_values
 import os
@@ -67,15 +68,21 @@ def alert(service):
             )
             for k, v in notification.get("body", {}).items():
                 payload[k] = v.format(args=service.get("args"))
+            s = requests.Session()
+            retries = Retry(
+                total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504]
+            )
+            s.mount("http://", HTTPAdapter(max_retries=retries))
+
             if notification.get("method") == "GET":
                 if notification.get("condition", lambda a: True)(current_time):
-                    r = requests.get(notification.get("url"))
+                    r = s.get(notification.get("url"))
                     logging.info(f"Response  : {r.text}")
                 else:
                     logging.info(f"Condition not met fpr notification")
             elif notification.get("method") == "POST":
                 if notification.get("condition", lambda a: True)(current_time):
-                    r = requests.post(
+                    r = s.post(
                         notification.get("url"),
                         data=payload,
                         headers=notification.get("headers", {}),
