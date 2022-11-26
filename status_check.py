@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from datetime import datetime
+import collections.abc
 import psutil
 import logging
 import sys
@@ -39,6 +40,31 @@ NOTIFICATION_CHANNELS = [
     {
         "method": "POST",
         "body": {
+            "incident": {
+                "type": "incident",
+                "title": "**{args} Error** → Server is not running please check asap.",
+                "service": {
+                    "id": config.get("PAGER_DUTY_SERVICE_ID"),
+                    "type": "service_reference",
+                },
+                "body": {
+                    "type": "incident_body",
+                    "details": "{args} Server is not running please check asap.",
+                },
+            }
+        },
+        "headers": {
+            "Accept": "application/vnd.pagerduty+json;version=2",
+            "Authorization": f"Token token={config.get('PAGER_DUTY_API_KEY')}",
+            "Content-Type": "application/json",
+            "From": config.get("PAGER_DUTY_EMAIL"),
+        },
+        "url": config.get("PAGER_DUTY_URL"),
+        "condition": lambda current_time: True,
+    },
+    {
+        "method": "POST",
+        "body": {
             "To": config.get("SMS_TO"),
             "MessagingServiceSid": config.get("SMS_SID"),
             "Body": "**{args}** → SK404 Server is not running please check asap.",
@@ -57,17 +83,34 @@ NOTIFICATION_CHANNELS = [
 ]
 
 
+def update_dict(d, service):
+    for k, v in d.items():
+        if isinstance(v, collections.abc.Mapping):
+            d[k] = update_dict(d.get(k, {}), service)
+        elif isinstance(v, list):
+            for l in v:
+                l = update_dict(l, service)
+        elif isinstance(v, str):
+            d[k] = v.format(args=service.get("args"))
+        elif isinstance(v, int) or isinstance(v, float) or isinstance(v, bool):
+            d[k] = v
+        else:
+            raise Exception("unknown type in update_dict")
+    return d
+
+
 def alert(service):
-    logging.info(f"Service is not running : {service}")
+    logging.info(f"\nService is not running : {service}")
     for notification in NOTIFICATION_CHANNELS:
         try:
+            print("\n")
             current_time = datetime.now(IST)
             payload = {}
             logging.info(
-                f"Current time in IST : {current_time}, hour : {current_time.hour}"
+                f"\nCurrent time in IST : {current_time}, hour : {current_time.hour}"
             )
-            for k, v in notification.get("body", {}).items():
-                payload[k] = v.format(args=service.get("args"))
+            payload = update_dict(notification.get("body", {}), service)
+
             s = requests.Session()
             retries = Retry(
                 total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504]
@@ -84,7 +127,7 @@ def alert(service):
                 if notification.get("condition", lambda a: True)(current_time):
                     r = s.post(
                         notification.get("url"),
-                        data=payload,
+                        data=json.dumps(payload),
                         headers=notification.get("headers", {}),
                     )
                     logging.info(f"Response  : {r.text}")
@@ -96,30 +139,35 @@ def alert(service):
 
 def execute():
     for service in SERVICES:
-        found = False
-        for process in psutil.process_iter():
-            try:
-                if process.pid == int(service.get("processId", -1)):
-                    found = True
-                    break
-                if (
-                    service.get("processName", "")
-                    and process.name().lower() == service.get("processName").lower()
-                ):
-                    found = True
-                    break
-                cmdline = process.cmdline()
-                if cmdline and service.get("args") and service.get("args") in cmdline:
-                    found = True
-                    break
-            except psutil.AccessDenied:
-                pass
-            except:
-                logging.exception(f"Error for pid : {process}")
-        logging.info(f"Found status for service : {service}  is  → {found}")
-        if not found:
-            # alert that service is not running
-            alert(service)
+        if service:
+            found = False
+            for process in psutil.process_iter():
+                try:
+                    if process.pid == int(service.get("processId", -1)):
+                        found = True
+                        break
+                    if (
+                        service.get("processName", "")
+                        and process.name().lower() == service.get("processName").lower()
+                    ):
+                        found = True
+                        break
+                    cmdline = process.cmdline()
+                    if (
+                        cmdline
+                        and service.get("args")
+                        and service.get("args") in cmdline
+                    ):
+                        found = True
+                        break
+                except psutil.AccessDenied:
+                    pass
+                except:
+                    logging.exception(f"Error for pid : {process}")
+            logging.info(f"Found status for service : {service}  is  → {found}")
+            if not found:
+                # alert that service is not running
+                alert(service)
 
 
 # def run():
