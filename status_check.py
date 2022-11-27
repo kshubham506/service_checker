@@ -26,30 +26,35 @@ SERVICES = json.load(open("services.json"))
 
 NOTIFICATION_CHANNELS = [
     {
+        "name": "SKTECH_WEBHOOK",
         "method": "POST",
         "body": {
-            "source": "{args}",
-            "origin": "{args}",
-            "message": "**{args} Error** → Server is not running please check asap.",
+            "source": "{name}",
+            "origin": "{name}",
+            "message": "**{name} Error** → Server is not running please check asap.",
             "hashTag": "#MidDayData",
         },
-        "headers": {"authorization": config.get("WEBHOOK_TOKEN")},
+        "headers": {
+            "authorization": config.get("WEBHOOK_TOKEN"),
+            "Content-Type": "application/json",
+        },
         "url": config.get("WEBHOOK_URL"),
         "condition": lambda current_time: True,
     },
     {
+        "name": "PAGER_DUTY",
         "method": "POST",
         "body": {
             "incident": {
                 "type": "incident",
-                "title": "**{args} Error** → Server is not running please check asap.",
+                "title": "**{name} Error** → Server is not running please check asap.",
                 "service": {
                     "id": config.get("PAGER_DUTY_SERVICE_ID"),
                     "type": "service_reference",
                 },
                 "body": {
                     "type": "incident_body",
-                    "details": "{args} Server is not running please check asap.",
+                    "details": "{name} Server is not running please check asap.",
                 },
             }
         },
@@ -63,11 +68,12 @@ NOTIFICATION_CHANNELS = [
         "condition": lambda current_time: True,
     },
     {
+        "name": "TWILIO_SMS",
         "method": "POST",
         "body": {
             "To": config.get("SMS_TO"),
             "MessagingServiceSid": config.get("SMS_SID"),
-            "Body": "**{args}** → SK404 Server is not running please check asap.",
+            "Body": "**{name}** → SK404 Server is not running please check asap.",
         },
         "headers": {
             "Authorization": config.get("SMS_AUTH"),
@@ -83,34 +89,35 @@ NOTIFICATION_CHANNELS = [
 ]
 
 
-def update_dict(d, service):
-    for k, v in d.items():
+def _update_dict(notification, service):
+    for k, v in notification.items():
         if isinstance(v, collections.abc.Mapping):
-            d[k] = update_dict(d.get(k, {}), service)
+            notification[k] = _update_dict(notification.get(k, {}), service)
         elif isinstance(v, list):
             for l in v:
-                l = update_dict(l, service)
+                l = _update_dict(l, service)
         elif isinstance(v, str):
-            d[k] = v.format(args=service.get("args"))
+            notification[k] = v.format(name=service.get("name"))
         elif isinstance(v, int) or isinstance(v, float) or isinstance(v, bool):
-            d[k] = v
+            notification[k] = v
         else:
             raise Exception("unknown type in update_dict")
-    return d
+    return notification
 
 
 def alert(service):
-    logging.info(f"\nService is not running : {service}")
+
+    logging.info(f"Service is not running : {service}")
     for notification in NOTIFICATION_CHANNELS:
         try:
-            print("\n")
             current_time = datetime.now(IST)
+            if not notification.get("condition", lambda a: True)(current_time):
+                logging.info(
+                    f"Condition not met for notification : {notification.get('name')} → {current_time}"
+                )
+                continue
             payload = {}
-            logging.info(
-                f"\nCurrent time in IST : {current_time}, hour : {current_time.hour}"
-            )
-            payload = update_dict(notification.get("body", {}), service)
-
+            payload = _update_dict(notification.get("body", {}).copy(), service)
             s = requests.Session()
             retries = Retry(
                 total=5, backoff_factor=0.1, status_forcelist=[500, 502, 503, 504]
@@ -118,21 +125,17 @@ def alert(service):
             s.mount("http://", HTTPAdapter(max_retries=retries))
 
             if notification.get("method") == "GET":
-                if notification.get("condition", lambda a: True)(current_time):
-                    r = s.get(notification.get("url"))
-                    logging.info(f"Response  : {r.text}")
-                else:
-                    logging.info(f"Condition not met fpr notification")
+                r = s.get(notification.get("url"))
+                logging.info(f"Response  : {r.text}")
+
             elif notification.get("method") == "POST":
-                if notification.get("condition", lambda a: True)(current_time):
-                    r = s.post(
-                        notification.get("url"),
-                        data=json.dumps(payload),
-                        headers=notification.get("headers", {}),
-                    )
-                    logging.info(f"Response  : {r.text}")
-                else:
-                    logging.info(f"Condition not met for notification")
+                r = s.post(
+                    notification.get("url"),
+                    data=json.dumps(payload),
+                    headers=notification.get("headers", {}),
+                )
+                logging.info(f"Response  : {r.text}")
+
         except Exception as ex:
             logging.exception(f"Error while sending notification ")
 
@@ -156,7 +159,7 @@ def execute():
                     if (
                         cmdline
                         and service.get("args")
-                        and service.get("args") in cmdline
+                        and all(i in cmdline for i in service.get("args"))
                     ):
                         found = True
                         break
@@ -164,19 +167,11 @@ def execute():
                     pass
                 except:
                     logging.exception(f"Error for pid : {process}")
+            print("\n")
             logging.info(f"Found status for service : {service}  is  → {found}")
             if not found:
                 # alert that service is not running
                 alert(service)
-
-
-# def run():
-#     from time import sleep
-
-#     while True:
-#         print("run")
-#         execute()
-#         sleep(40)
 
 
 if __name__ == "__main__":

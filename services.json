@@ -2,16 +2,27 @@
     {
         "processId": -1,
         "processName": "",
-        "args": "freeserver5"
+        "name": "freeserver2",
+        "args": [
+            "freeserver2"
+        ]
     },
     {
         "processId": -1,
         "processName": "",
-        "args": "freeserver6"
+        "name": "python-server",
+        "args": [
+            "python",
+            "app.py"
+        ]
     },
     {
         "processId": -1,
         "processName": "",
-        "args": "freeserver7"
+        "name": "central-node-server",
+        "args": [
+            "node",
+            "app.js"
+        ]
     }
 ]
