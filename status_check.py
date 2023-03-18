@@ -11,6 +11,7 @@ import pytz
 from dotenv import dotenv_values
 import os
 import json
+from copy import deepcopy
 
 config = {
     **dotenv_values(".env"),
@@ -65,6 +66,28 @@ NOTIFICATION_CHANNELS = [
             "From": config.get("PAGER_DUTY_EMAIL"),
         },
         "url": config.get("PAGER_DUTY_URL"),
+        "condition": lambda current_time: False,
+    },
+    {
+        "name": "PAGER_DUTY_EVENT",
+        "method": "POST",
+        "body": {
+            "payload": {
+                "summary": "**{name} Error** → Server is not running please check asap.",
+                "severity": "critical",
+                "source": "{name}",
+            },
+            "routing_key": config.get("PAGER_DUTY_INTEGRATION_KEY"),
+            "event_action": "trigger",
+            "dedup_key": "{name}",
+        },
+        "headers": {
+            "Accept": "application/vnd.pagerduty+json;version=2",
+            "Authorization": f"Token token={config.get('PAGER_DUTY_API_KEY')}",
+            "Content-Type": "application/json",
+            "From": config.get("PAGER_DUTY_EMAIL"),
+        },
+        "url": config.get("PAGER_DUTY_EVENT_URL"),
         "condition": lambda current_time: True,
     },
     {
@@ -80,11 +103,7 @@ NOTIFICATION_CHANNELS = [
             "Content-Type": "application/x-www-form-urlencoded",
         },
         "url": config.get("SMS_URL"),
-        "condition": lambda current_time: current_time.hour >= 10
-        and (
-            (current_time.minute > 15 and current_time.minute < 30)
-            or (current_time.minute > 45 and current_time.minute < 60)
-        ),
+        "condition": lambda current_time: False,
     },
 ]
 
@@ -106,9 +125,8 @@ def _update_dict(notification, service):
 
 
 def alert(service):
-
     logging.info(f"Service is not running : {service}")
-    for notification in NOTIFICATION_CHANNELS:
+    for notification in deepcopy(NOTIFICATION_CHANNELS):
         try:
             current_time = datetime.now(IST)
             if not notification.get("condition", lambda a: True)(current_time):
